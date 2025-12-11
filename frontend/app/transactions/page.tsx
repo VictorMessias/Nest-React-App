@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { transactionsAPI } from "@/lib/api"
@@ -7,39 +6,19 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
 import { AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Copy, Check, X, Plus, Search } from "lucide-react"
 import TransactionTable from "@/components/transaction-table"
+import { TransactionStatus, Transaction, SortField, SortOrder } from "@/lib/types"
+import Filters from "@/components/filters"
 
-type TransactionStatus = "pending" | "confirmed" | "failed"
-
-
-interface Transaction {
-  id: string
-  fromAddress: string
-  toAddress: string
-  amount: string
-  gasLimit: string
-  gasPrice: string
-  status: TransactionStatus
-  timestamp: string
-  hash?: string
-}
-
-
-type SortField = "date" | "amount" | "status"
-type SortOrder = "asc" | "desc"
-
-
-const ITEMS_PER_PAGE = 15
+const PAGINATION_ITEMS_PER_PAGE = 15
 
 export default function TransactionsPage() {
   const router = useRouter()
   const { toast } = useToast()
   
+  // States
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,12 +36,14 @@ export default function TransactionsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || dateFrom || dateTo
+  const hasFilters = searchQuery.length > 0 || statusFilter !== "all" || dateFrom.length > 0 || dateTo.length > 0
 
+
+  // Use effects
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery)
-    }, 300)
+    }, 500)
 
     return () => clearTimeout(timer)
   }, [searchQuery])
@@ -77,7 +58,7 @@ export default function TransactionsPage() {
   }, [debouncedSearch, statusFilter, dateFrom, dateTo])
 
 
-  const filteredAndSortedTransactions = useMemo(() => {
+  const transactionsResult = useMemo(() => {
     let filtered = [...transactions]
 
     if (debouncedSearch) {
@@ -127,14 +108,15 @@ export default function TransactionsPage() {
     return filtered
   }, [transactions, debouncedSearch, statusFilter, dateFrom, dateTo, sortField, sortOrder])
 
-  const paginatedTransactions = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredAndSortedTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-  }, [filteredAndSortedTransactions, currentPage])
+  const totalPages = Math.ceil(transactionsResult.length / PAGINATION_ITEMS_PER_PAGE)
 
-  const totalPages = Math.ceil(filteredAndSortedTransactions.length / ITEMS_PER_PAGE)
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGINATION_ITEMS_PER_PAGE
+    return transactionsResult.slice(startIndex, startIndex + PAGINATION_ITEMS_PER_PAGE)
+  }, [transactionsResult, currentPage])
+
   
-  const fetchTransactions = async () => {
+  const fetchTransactions = async () =>{
     setIsLoading(true)
     setError(null)
     try {
@@ -144,7 +126,7 @@ export default function TransactionsPage() {
       setError(error.response?.data?.message || "Failed to load transactions")
       toast({
         title: "Error",
-        description: "Failed to load transactions. Please try again.",
+        description: "Failed to load transactions",
         variant: "destructive",
         duration: 5000,
       })
@@ -154,7 +136,7 @@ export default function TransactionsPage() {
   }
 
 
-  const clearFilters = () => {
+  const removeFilter = () => {
     setSearchQuery("")
     setStatusFilter("all")
     setDateFrom("")
@@ -169,7 +151,6 @@ export default function TransactionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Transactions</h1>
-            <p className="text-muted-foreground">Manage your blockchain transactions</p>
           </div>
         </div>
         <Card>
@@ -191,7 +172,6 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Transactions</h1>
-          <p className="text-muted-foreground">Manage your blockchain transactions</p>
         </div>
         <Button onClick={() => router.push("/transactions/create")}>
           <Plus className="mr-2 h-4 w-4" />
@@ -199,91 +179,31 @@ export default function TransactionsPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="space-y-4 pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="search">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Hash or address..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2 top-2.5"
-                  >
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="failed">Failed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="dateFrom">From Date</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="dateTo">To Date</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="mr-2 h-4 w-4" />
-                Clear Filters
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Filters
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        dateFrom={dateFrom}
+        setDateFrom={setDateFrom}
+        dateTo={dateTo}
+        setDateTo={setDateTo}
+        removeFilter={removeFilter}
+        hasFilters={hasFilters}
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Transactions</CardTitle>
           <CardDescription>
             {isLoading ? (
               "Loading..."
-            ) : filteredAndSortedTransactions.length === 0 ? (
+            ) : transactionsResult.length === 0 ? (
               "No transactions found"
             ) : (
-              `Showing ${(currentPage - 1) * ITEMS_PER_PAGE + 1}-${Math.min(
-                currentPage * ITEMS_PER_PAGE,
-                filteredAndSortedTransactions.length
-              )} of ${filteredAndSortedTransactions.length} transactions`
+              `Showing ${(currentPage - 1) * PAGINATION_ITEMS_PER_PAGE + 1}-${Math.min(
+                currentPage * PAGINATION_ITEMS_PER_PAGE,
+                transactionsResult.length
+              )} of ${transactionsResult.length} transactions`
             )}
           </CardDescription>
         </CardHeader>
@@ -294,18 +214,18 @@ export default function TransactionsPage() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : filteredAndSortedTransactions.length === 0 ? (
+          ) : transactionsResult.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 space-y-4">
               <AlertCircle className="h-12 w-12 text-muted-foreground" />
               <div className="text-center space-y-2">
                 <h3 className="text-lg font-semibold">No Transactions Found</h3>
                 <p className="text-sm text-muted-foreground">
-                  {hasActiveFilters
+                  {hasFilters
                     ? "Try adjusting your filters"
                     : "Create your first transaction to get started"}
                 </p>
               </div>
-              {!hasActiveFilters && (
+              {!hasFilters && (
                 <Button onClick={() => router.push("/transactions/create")}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Transaction
