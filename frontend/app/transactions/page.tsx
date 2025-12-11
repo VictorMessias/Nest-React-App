@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Copy, Check, X, Plus, Search } from "lucide-react"
+import { AlertCircle, X, Plus, Search, Download } from "lucide-react"
 import TransactionTable from "@/components/transaction-table"
 import { TransactionStatus, Transaction, SortField, SortOrder } from "@/lib/types"
 import Filters from "@/components/filters"
 
-const PAGINATION_ITEMS_PER_PAGE = 15
+const PAGE_SIZE = 15
 
 export default function TransactionsPage() {
   const router = useRouter()
@@ -23,7 +23,7 @@ export default function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  const [searchQuery, setSearchQuery] = useState("")
+  const [q, setQ] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState("")
@@ -36,21 +36,21 @@ export default function TransactionsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
 
-  const hasFilters = searchQuery.length > 0 || statusFilter !== "all" || dateFrom.length > 0 || dateTo.length > 0
+  const hasFilters = q.length > 0 || statusFilter !== "all" || dateFrom.length > 0 || dateTo.length > 0
 
 
   // Use effects
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery)
+      setDebouncedSearch(q)
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [q])
 
 
   useEffect(() => {
-    fetchTransactions()
+    loadTransactions()
   }, [])
 
   useEffect(() => {
@@ -108,22 +108,22 @@ export default function TransactionsPage() {
     return filtered
   }, [transactions, debouncedSearch, statusFilter, dateFrom, dateTo, sortField, sortOrder])
 
-  const totalPages = Math.ceil(transactionsResult.length / PAGINATION_ITEMS_PER_PAGE)
+  const totalPages = Math.ceil(transactionsResult.length / PAGE_SIZE)
 
   const paginatedTransactions = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGINATION_ITEMS_PER_PAGE
-    return transactionsResult.slice(startIndex, startIndex + PAGINATION_ITEMS_PER_PAGE)
+    const startIndex = (currentPage - 1) * PAGE_SIZE
+    return transactionsResult.slice(startIndex, startIndex + PAGE_SIZE)
   }, [transactionsResult, currentPage])
 
   
-  const fetchTransactions = async () =>{
+  const loadTransactions = async () =>{
     setIsLoading(true)
     setError(null)
     try {
       const response = await transactionsAPI.getAll()
       setTransactions(response.data.data)
-    } catch (error: any) {
-      setError(error.response?.data?.message || "Failed to load transactions")
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to load transactions")
       toast({
         title: "Error",
         description: "Failed to load transactions",
@@ -137,11 +137,50 @@ export default function TransactionsPage() {
 
 
   const removeFilter = () => {
-    setSearchQuery("")
+    setQ("")
     setStatusFilter("all")
     setDateFrom("")
     setDateTo("")
     setCurrentPage(1)
+  }
+
+  const exportToCSV = () => {
+    if (!transactionsResult.length) return
+
+    const header = [
+      "Hash",
+      "From",
+      "To",
+      "Amount",
+      "GasLimit",
+      "GasPrice",
+      "Fee",
+      "Status",
+      "Timestamp"
+    ]
+
+    const rows = transactionsResult.map(t => {
+      const fee = (parseFloat(t.gasLimit) * parseFloat(t.gasPrice)).toFixed(8)
+      return [
+        `"${t.hash || t.id}"`,
+        `"${t.fromAddress}"`,
+        `"${t.toAddress}"`,
+        t.amount,
+        t.gasLimit,
+        t.gasPrice,
+        fee,
+        t.status,
+        new Date(t.timestamp).toISOString()
+      ].join(",")
+    })
+
+    const blob = new Blob([header.join(",") + "\n" + rows.join("\n")], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "transactions.csv"
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
 
@@ -160,7 +199,7 @@ export default function TransactionsPage() {
               <h3 className="text-lg font-semibold">Error Loading Transactions</h3>
               <p className="text-sm text-muted-foreground">{error}</p>
             </div>
-            <Button onClick={fetchTransactions}>Retry</Button>
+            <Button onClick={loadTransactions}>Retry</Button>
           </CardContent>
         </Card>
       </div>
@@ -173,15 +212,25 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-3xl font-bold">Transactions</h1>
         </div>
-        <Button onClick={() => router.push("/transactions/create")}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Transaction
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={exportToCSV}
+            disabled={isLoading || transactionsResult.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button onClick={() => router.push("/transactions/create")}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Transaction
+          </Button>
+        </div>
       </div>
 
       <Filters
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
+        searchQuery={q}
+        setSearchQuery={setQ}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
         dateFrom={dateFrom}
@@ -200,8 +249,8 @@ export default function TransactionsPage() {
             ) : transactionsResult.length === 0 ? (
               "No transactions found"
             ) : (
-              `Showing ${(currentPage - 1) * PAGINATION_ITEMS_PER_PAGE + 1}-${Math.min(
-                currentPage * PAGINATION_ITEMS_PER_PAGE,
+              `Showing ${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(
+                currentPage * PAGE_SIZE,
                 transactionsResult.length
               )} of ${transactionsResult.length} transactions`
             )}

@@ -21,9 +21,9 @@ export default function TransactionDetailsPage() {
   const [transaction, setTransaction] = useState<Transaction | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
-  const fetchTransaction = async () => {
+  const loadTransaction = async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -44,7 +44,7 @@ export default function TransactionDetailsPage() {
 
   useEffect(() => {
     if (id) {
-      fetchTransaction()
+      loadTransaction()
     }
   }, [id])
 
@@ -56,7 +56,6 @@ export default function TransactionDetailsPage() {
     const fee = limit * price
     return fee.toFixed(8)
   }
-
 
   const getStatusColor = (status: TransactionStatus) => {
     const colors = {
@@ -119,13 +118,13 @@ export default function TransactionDetailsPage() {
           <CardContent className="flex flex-col items-center justify-center py-10 space-y-4">
             <AlertCircle className="h-12 w-12 text-destructive" />
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold">Error Loading Transaction</h3>
+              <h3 className="text-lg font-semibold">Error loading Transaction</h3>
               <p className="text-sm text-muted-foreground">
                 {error || "Transaction not found"}
               </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={fetchTransaction}>Retry</Button>
+              <Button onClick={loadTransaction}>Retry</Button>
               <Button variant="outline" onClick={() => router.push("/transactions")}>
                 Back to Transactions
               </Button>
@@ -167,14 +166,10 @@ export default function TransactionDetailsPage() {
                 {transaction.hash || transaction.id}
               </code>
               <button
-                onClick={() => copyToClipboard(transaction.hash || transaction.id, "hash", setCopiedField, toast)}
+                onClick={() => copyToClipboard(transaction.hash || transaction.id, "hash", setCopied, toast)}
                 className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
               >
-                {copiedField === "hash" ? (
-                  <Check className="h-4 w-4 text-green-500" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
+                {copied === "hash" ? (<Check className="h-4 w-4 text-green-500" />) : (<Copy className="h-4 w-4" />)}
               </button>
             </div>
           </div>
@@ -187,14 +182,10 @@ export default function TransactionDetailsPage() {
                   {transaction.fromAddress}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(transaction.fromAddress, "from", setCopiedField, toast)}
+                  onClick={() => copyToClipboard(transaction.fromAddress, "from", setCopied, toast)}
                   className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 >
-                  {copiedField === "from" ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
+                  {copied === "from" ? (<Check className="h-4 w-4 text-green-500" />) : (<Copy className="h-4 w-4" />)}
                 </button>
               </div>
             </div>
@@ -206,14 +197,10 @@ export default function TransactionDetailsPage() {
                   {transaction.toAddress}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(transaction.toAddress, "to", setCopiedField, toast)}
+                  onClick={() => copyToClipboard(transaction.toAddress, "to", setCopied, toast)}
                   className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 >
-                  {copiedField === "to" ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
+                  {copied === "to" ? (<Check className="h-4 w-4 text-green-500" />) : (<Copy className="h-4 w-4" />)}
                 </button>
               </div>
             </div>
